@@ -17,10 +17,10 @@
 import unittest
 
 import luigi
-import luigi.notifications
 import luigi_postgres_dburl
 import testing.postgresql
 from psycopg2.extensions import make_dsn
+from mock import patch, PropertyMock
 
 """
 Typical use cases that should be tested:
@@ -39,7 +39,8 @@ Postgresql = testing.postgresql.PostgresqlFactory(cache_initialized_db=True)
 
 class CopyToTestDB(luigi_postgres_dburl.CopyToTable):
 
-    dsn = make_dsn(**Postgresql().dsn())
+    # Use this as a placeholder before it gets overridden in each of the tests
+    dsn = "postgres://user@localhost/dbname"
 
 
 class TestPostgresTask(CopyToTestDB):
@@ -90,7 +91,7 @@ class TestPostgresImportTask(unittest.TestCase):
 
     def setUp(self):
         # Use the generated Postgresql class instead of testing.postgresql.Postgresql
-        self.postgresql = Postgresql()
+        self.postgresql = testing.postgresql.Postgresql()
 
     def tearDown(self):
         self.postgresql.stop()
@@ -103,41 +104,45 @@ class TestPostgresImportTask(unittest.TestCase):
                          '\\n\\r\\\\\\t\\\\N\\\\')
 
     def test_repeat(self):
-        task = TestPostgresTask()
-        conn = task.output().connect()
-        conn.autocommit = True
-        cursor = conn.cursor()
-        cursor.execute('DROP TABLE IF EXISTS {table}'.format(table=task.table))
-        cursor.execute('DROP TABLE IF EXISTS {marker_table}'.format(marker_table=luigi_postgres_dburl.PostgresTarget.marker_table))
+        with patch.object(CopyToTestDB, 'dsn', new_callable=PropertyMock) as mock:
+            mock.return_value = make_dsn(**self.postgresql.dsn())
+            task = TestPostgresTask()
+            conn = task.output().connect()
+            conn.autocommit = True
+            cursor = conn.cursor()
+            cursor.execute('DROP TABLE IF EXISTS {table}'.format(table=task.table))
+            cursor.execute('DROP TABLE IF EXISTS {marker_table}'.format(marker_table=luigi_postgres_dburl.PostgresTarget.marker_table))
 
-        luigi.build([task], local_scheduler=True)
-        luigi.build([task], local_scheduler=True)  # try to schedule twice
+            luigi.build([task], local_scheduler=True)
+            luigi.build([task], local_scheduler=True)  # try to schedule twice
 
-        cursor.execute("""SELECT test_text, test_int, test_float
-                          FROM test_table
-                          ORDER BY id ASC""")
+            cursor.execute("""SELECT test_text, test_int, test_float
+                              FROM test_table
+                              ORDER BY id ASC""")
 
-        rows = tuple(cursor)
+            rows = tuple(cursor)
 
-        self.assertEqual(rows, (
-            ('foo', 123, 123.45),
-            (None, -100, 5143.213),
-            ('\t\n\r\\N', 0.0, 0),
-            (u'éцү我', 0, 0),
-            (u'', 0, None),  # Test working default null charcter
-        ))
+            self.assertEqual(rows, (
+                ('foo', 123, 123.45),
+                (None, -100, 5143.213),
+                ('\t\n\r\\N', 0.0, 0),
+                (u'éцү我', 0, 0),
+                (u'', 0, None),  # Test working default null charcter
+            ))
 
     def test_multimetric(self):
-        metrics = MetricBase()
-        conn = metrics.output().connect()
-        conn.autocommit = True
-        conn.cursor().execute('DROP TABLE IF EXISTS {table}'.format(table=metrics.table))
-        conn.cursor().execute('DROP TABLE IF EXISTS {marker_table}'.format(marker_table=luigi_postgres_dburl.PostgresTarget.marker_table))
-        luigi.build([Metric1(20), Metric1(21), Metric2("foo")], local_scheduler=True)
+        with patch.object(CopyToTestDB, 'dsn', new_callable=PropertyMock) as mock:
+            mock.return_value = make_dsn(**self.postgresql.dsn())
+            metrics = MetricBase()
+            conn = metrics.output().connect()
+            conn.autocommit = True
+            conn.cursor().execute('DROP TABLE IF EXISTS {table}'.format(table=metrics.table))
+            conn.cursor().execute('DROP TABLE IF EXISTS {marker_table}'.format(marker_table=luigi_postgres_dburl.PostgresTarget.marker_table))
+            luigi.build([Metric1(20), Metric1(21), Metric2("foo")], local_scheduler=True)
 
-        cursor = conn.cursor()
-        cursor.execute('select count(*) from {table}'.format(table=metrics.table))
-        self.assertEqual(tuple(cursor), ((9,),))
+            cursor = conn.cursor()
+            cursor.execute('select count(*) from {table}'.format(table=metrics.table))
+            self.assertEqual(tuple(cursor), ((9,),))
 
     def test_clear(self):
         class Metric2Copy(Metric2):
@@ -146,14 +151,16 @@ class TestPostgresImportTask(unittest.TestCase):
                 query = "TRUNCATE {0}".format(self.table)
                 connection.cursor().execute(query)
 
-        clearer = Metric2Copy(21)
-        conn = clearer.output().connect()
-        conn.autocommit = True
-        conn.cursor().execute('DROP TABLE IF EXISTS {table}'.format(table=clearer.table))
-        conn.cursor().execute('DROP TABLE IF EXISTS {marker_table}'.format(marker_table=luigi_postgres_dburl.PostgresTarget.marker_table))
+        with patch.object(CopyToTestDB, 'dsn', new_callable=PropertyMock) as mock:
+            mock.return_value = make_dsn(**self.postgresql.dsn())
+            clearer = Metric2Copy(21)
+            conn = clearer.output().connect()
+            conn.autocommit = True
+            conn.cursor().execute('DROP TABLE IF EXISTS {table}'.format(table=clearer.table))
+            conn.cursor().execute('DROP TABLE IF EXISTS {marker_table}'.format(marker_table=luigi_postgres_dburl.PostgresTarget.marker_table))
 
-        luigi.build([Metric1(0), Metric1(1)], local_scheduler=True)
-        luigi.build([clearer], local_scheduler=True)
-        cursor = conn.cursor()
-        cursor.execute('select count(*) from {table}'.format(table=clearer.table))
-        self.assertEqual(tuple(cursor), ((3,),))
+            luigi.build([Metric1(0), Metric1(1)], local_scheduler=True)
+            luigi.build([clearer], local_scheduler=True)
+            cursor = conn.cursor()
+            cursor.execute('select count(*) from {table}'.format(table=clearer.table))
+            self.assertEqual(tuple(cursor), ((3,),))
