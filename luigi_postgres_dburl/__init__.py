@@ -22,8 +22,8 @@ Also provides a helper task to copy data into a Postgres table or return data fr
 import abc
 import datetime
 import logging
-import re
 import tempfile
+from luigi_postgres_dburl.multi_replacer import MultiReplacer
 
 from luigi import six
 
@@ -36,53 +36,6 @@ try:
     import psycopg2.errorcodes
 except ImportError:
     logger.warning("Loading postgres module without psycopg2 installed. Will crash at runtime if postgres functionality is used.")
-
-
-class MultiReplacer(object):
-    """
-    Object for one-pass replace of multiple words
-
-    Substituted parts will not be matched against other replace patterns, as opposed to when using multipass replace.
-    The order of the items in the replace_pairs input will dictate replacement precedence.
-
-    Constructor arguments:
-    replace_pairs -- list of 2-tuples which hold strings to be replaced and replace string
-
-    Usage:
-
-    .. code-block:: python
-
-        >>> replace_pairs = [("a", "b"), ("b", "c")]
-        >>> MultiReplacer(replace_pairs)("abcd")
-        'bccd'
-        >>> replace_pairs = [("ab", "x"), ("a", "x")]
-        >>> MultiReplacer(replace_pairs)("ab")
-        'x'
-        >>> replace_pairs.reverse()
-        >>> MultiReplacer(replace_pairs)("ab")
-        'xb'
-    """
-# TODO: move to misc/util module
-
-    def __init__(self, replace_pairs):
-        """
-        Initializes a MultiReplacer instance.
-
-        :param replace_pairs: list of 2-tuples which hold strings to be replaced and replace string.
-        :type replace_pairs: tuple
-        """
-        replace_list = list(replace_pairs)  # make a copy in case input is iterable
-        self._replace_dict = dict(replace_list)
-        pattern = '|'.join(re.escape(x) for x, y in replace_list)
-        self._search_re = re.compile(pattern)
-
-    def _replacer(self, match_object):
-        # this method is used as the replace function in the re.sub below
-        return self._replace_dict[match_object.group()]
-
-    def __call__(self, search_string):
-        # using function replacing for a per-result replace
-        return self._search_re.sub(self._replacer, search_string)
 
 
 # these are the escape sequences recognized by postgres COPY
@@ -103,7 +56,9 @@ class PostgresTarget(luigi.Target):
 
     This will rarely have to be directly instantiated by the user.
     """
-    marker_table = luigi.configuration.get_config().get('postgres', 'marker-table', 'table_updates')
+    marker_table = luigi.configuration.get_config().get('postgres',
+                                                        'marker-table',
+                                                        'table_updates')
 
     # Use DB side timestamps or client side timestamps in the marker_table
     use_db_timestamps = True
@@ -115,7 +70,7 @@ class PostgresTarget(luigi.Target):
         Args:
             table (str): Table PostgresTarget interacts with
             update_id (str): An identifier for this data set
-            connect_params (dict): Arguments for connection
+            dsn (str): postgres connection string
 
         """
         self.table = table
@@ -220,6 +175,7 @@ class CopyToTable(luigi.task.MixinNaiveBulkComplete, luigi.Task):
 
         * `table`
         * `columns`
+        * `dsn`
     """
 
     @abc.abstractproperty
@@ -396,7 +352,7 @@ class PostgresQuery(luigi.task.MixinNaiveBulkComplete, luigi.Task):
     Template task for querying a Postgres compatible database
 
     Usage:
-    Subclass and override the required `host`, `database`, `user`, `password`, `table`, and `query` attributes.
+    Subclass and override the required `table`, `query` and `dsn` attributes.
 
     Override the `run` method if your use case requires some action with the query result.
 
