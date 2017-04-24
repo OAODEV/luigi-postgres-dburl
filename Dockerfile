@@ -16,5 +16,3 @@ WORKDIR /app
 RUN pip install luigi mock nose
 
 RUN cd /app && python3 setup.py install
-
-RUN su postgres -c nosetests

@@ -1,0 +1,20 @@
+machine:
+  services:
+    - docker
+  environment:
+    service_name: etl-dfp
+    unittest_cmd: su postgres -c nosetests -- -s
+    CLOUDSDK_CORE_DISABLE_PROMPTS: 1
+    CLOUDSDK_PYTHON_SITEPACKAGES: 1
+
+    build_tag: $(cat $CIRCLE_PROJECT_REPONAME/Version)_build.$(echo $CIRCLE_SHA1 | cut -c1-7)
+
+
+dependencies:
+  override:
+    - echo "The build name is in here!!!" $service_name:$build_tag
+    - docker build -t $service_name:$build_tag .
+
+test:
+  override:
+    - docker run $service_name:$build_tag $unittest_cmd
