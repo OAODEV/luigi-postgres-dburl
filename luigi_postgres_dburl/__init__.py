@@ -199,8 +199,6 @@ class CopyToTable(luigi.task.MixinNaiveBulkComplete, luigi.Task):
 
     column_separator = "\t"  # how columns are separated in the file copied into postgres
 
-
-
     def init_copy(self, connection):
         """
         Override to perform custom queries.
@@ -260,10 +258,11 @@ class CopyToTable(luigi.task.MixinNaiveBulkComplete, luigi.Task):
         If overridden, use the provided connection object for setting up the table in order to
         create the table and insert data using the same transaction.
         """
-        if len(self.columns[0]) == 1:
+        first_col = self.columns[0]
+        if len(first_col) == 1 or isinstance(first_col, six.string_types):
             # only names of columns specified, no types
             raise NotImplementedError("create_table() not implemented for %r and columns types not specified" % self.table)
-        elif len(self.columns[0]) == 2:
+        elif len(first_col) == 2:
             # if columns is specified as (name, type) tuples
             coldefs = ','.join(
                 '{name} {type}'.format(name=name, type=type) for name, type in self.columns
