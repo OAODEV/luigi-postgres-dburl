@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-install_requires = ['psycopg2>=2.7.1',
+install_requires = ['psycopg2-binary>=2.7.1',
                     'testing.postgresql']
 
 setup(
