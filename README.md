@@ -5,7 +5,7 @@
 **Goal**: Add support for Postgres dsn connection strings to Luigi.
 
 The code from this repo is a slightly modified version of what's in
-`luigi.contrib.postgres`, so any modules defined there as of luigi 2.6.1
+`luigi.contrib.postgres`, so any modules defined there as of luigi 2.8.11
 should be available in this repo.
 
 **Reason for repo existence**: Rather than needing host, user, password, and

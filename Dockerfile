@@ -1,14 +1,10 @@
 FROM python:3-alpine
-MAINTAINER henry.rizzi@adops.com
+LABEL maintainer="henry.rizzi@adops.com"
 
-RUN apk update && \
-apk add --update build-base \
+RUN apk add --no-cache build-base \
 libffi-dev \
 postgresql-dev \
 postgresql
-
-
-RUN rm -rf /var/cache/apk/* && rm -rf /tmp/*
 
 ADD . /app
 WORKDIR /app

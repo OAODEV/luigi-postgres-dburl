@@ -25,8 +25,6 @@ import logging
 import tempfile
 from luigi_postgres_dburl.multi_replacer import MultiReplacer
 
-from luigi import six
-
 import luigi
 
 logger = logging.getLogger('luigi-interface')
@@ -241,7 +239,7 @@ class CopyToTable(luigi.task.MixinNaiveBulkComplete, luigi.Task):
         )
 
     def copy(self, cursor, file):
-        if isinstance(self.columns[0], six.string_types):
+        if isinstance(self.columns[0], str):
             column_names = self.columns
         elif len(self.columns[0]) == 2:
             column_names = [c[0] for c in self.columns]
@@ -259,7 +257,7 @@ class CopyToTable(luigi.task.MixinNaiveBulkComplete, luigi.Task):
         create the table and insert data using the same transaction.
         """
         first_col = self.columns[0]
-        if len(first_col) == 1 or isinstance(first_col, six.string_types):
+        if len(first_col) == 1 or isinstance(first_col, str):
             # only names of columns specified, no types
             raise NotImplementedError("create_table() not implemented for %r and columns types not specified" % self.table)
         elif len(first_col) == 2:
@@ -287,7 +285,7 @@ class CopyToTable(luigi.task.MixinNaiveBulkComplete, luigi.Task):
         if value in self.null_values:
             return r'\\N'
         else:
-            return default_escape(six.text_type(value))
+            return default_escape(str(value))
 
     def run(self):
         """

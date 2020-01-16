@@ -1,7 +1,7 @@
 import re
 
 
-class MultiReplacer(object):
+class MultiReplacer:
     """
     Object for one-pass replace of multiple words
 
